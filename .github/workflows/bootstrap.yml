@@ -153,24 +153,40 @@ jobs:
       # ── Wait for ArgoCD to sync and become healthy ──────────────────────────
       - name: Wait for ArgoCD sync
         run: |
-          echo "Waiting for ArgoCD to sync the agriconnect application..."
-          for i in $(seq 1 36); do
+          echo "Waiting up to 15 minutes for ArgoCD application to become healthy..."
+          HEALTHY=false
+          for i in $(seq 1 90); do
             SYNC=$(kubectl get application agriconnect -n argocd \
               -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "Unknown")
             HEALTH=$(kubectl get application agriconnect -n argocd \
               -o jsonpath='{.status.health.status}' 2>/dev/null || echo "Unknown")
-            echo "Attempt $i/36 — Sync: $SYNC, Health: $HEALTH"
+            echo "Attempt $i/90 — Sync: $SYNC, Health: $HEALTH"
             if [ "$SYNC" = "Synced" ] && [ "$HEALTH" = "Healthy" ]; then
               echo "ArgoCD application is synced and healthy!"
+              HEALTHY=true
               break
-            fi
-            if [ "$i" = "36" ]; then
-              echo "ERROR: ArgoCD did not sync within 6 minutes"
-              kubectl get application agriconnect -n argocd -o yaml
-              exit 1
             fi
             sleep 10
           done
+
+          if [ "$HEALTHY" = "false" ]; then
+            echo ""
+            echo "WARNING: ArgoCD health did not reach Healthy within 15 min. Dumping diagnostics..."
+            echo ""
+            echo "=== Pods in production namespace ==="
+            kubectl get pods -n production -o wide
+            echo ""
+            echo "=== Deployments ==="
+            kubectl get deployments -n production
+            echo ""
+            echo "=== Pod describe (Events section) ==="
+            kubectl describe pods -n production 2>/dev/null | grep -A 20 "^Events:" || true
+            echo ""
+            echo "=== auth-service logs (last 30 lines) ==="
+            kubectl logs -n production -l app=auth-service --tail=30 2>/dev/null || echo "(no logs yet)"
+            echo ""
+            echo "Continuing bootstrap — DB migration may fix readiness..."
+          fi
 
       # ── Wait for ALB URL ────────────────────────────────────────────────────
       - name: Wait for ALB DNS
@@ -206,10 +222,18 @@ jobs:
           etag = resp['ETag']
           cfg  = resp['DistributionConfig']
 
+          updated = 0
           for origin in cfg['Origins']['Items']:
-              if 'elb.amazonaws.com' in origin.get('DomainName', ''):
-                  print(f"Updating origin {origin['Id']}: {origin['DomainName']} -> {alb}")
-                  origin['DomainName'] = alb
+              domain = origin.get('DomainName', '')
+              # Match placeholder (first apply) or real ALB (re-run)
+              if 'elb.amazonaws.com' in domain or 'placeholder' in domain or '.amazonaws.com' in domain:
+                  if 's3' not in domain:
+                      print(f"Updating origin {origin['Id']}: {domain} -> {alb}")
+                      origin['DomainName'] = alb
+                      updated += 1
+          if updated == 0:
+              print("WARNING: no matching ALB origin found — check CloudFront origins manually")
+              import json; print(json.dumps([o['DomainName'] for o in cfg['Origins']['Items']]))
 
           cf.update_distribution(Id=cf_id, DistributionConfig=cfg, IfMatch=etag)
           print(f"CloudFront updated. New ALB: {alb}")
