@@ -1,0 +1,9 @@
+{
+  "name": "weather-alert-processor",
+  "version": "1.0.0",
+  "description": "AgriConnect Lambda: checks weather for farmer locations and publishes SNS alerts",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-sns": "^3.400.0"
+  }
+}

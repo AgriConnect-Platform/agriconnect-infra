@@ -1,0 +1,52 @@
+# ── Copy this file to terraform.tfvars and fill in your values ────────────────
+# terraform.tfvars is gitignored — never commit it.
+
+# AWS
+aws_region  = "ap-south-1"
+environment = "dev"
+
+# Networking
+vpc_cidr             = "10.0.0.0/16"
+public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
+private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
+availability_zones   = ["ap-south-1a", "ap-south-1b"]
+
+# EC2
+# Ubuntu 22.04 LTS ap-south-1: ami-0f5ee92e2d63afc18
+# To find the latest: aws ec2 describe-images --owners 099720109477 \
+#   --filters "Name=name,Values=ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*" \
+#   --query "sort_by(Images,&CreationDate)[-1].ImageId" --region ap-south-1
+ami_id                 = "ami-0f5ee92e2d63afc18"
+key_pair_name          = "your-key-pair-name"
+bastion_instance_type  = "t3.micro"
+backend_instance_type  = "t3.medium"
+frontend_instance_type = "t3.small"
+
+# RDS
+rds_instance_class    = "db.t3.micro"
+rds_allocated_storage = 20
+rds_db_name           = "agriconnect"
+rds_username          = "admin"
+rds_password          = "Sixninesixtynine"
+
+# S3
+s3_produce_images_bucket  = "agriconnect-produce-images"
+s3_delivery_proofs_bucket = "agriconnect-delivery-proofs"
+
+# Existing AWS resources (imported — must match exact names in AWS)
+lambda_function_name         = "weather-alert-processor"
+eventbridge_rule_name        = "agriconnect-weather-check"
+sns_weather_topic_name       = "AgriConnect-WeatherAlerts"
+sns_events_topic_name        = "AgriConnect-Events"
+sqs_notifications_queue_name = "AgriConnect-Notifications-Queue"
+sqs_dlq_name                 = "AgriConnect-Notifications-DLQ"
+lambda_iam_role_name         = "weather-alert-lambda-role"
+ec2_iam_role_name            = "AgriConnect-EC2-Role"
+
+# Application
+github_repo_url     = "https://github.com/Asadkhanrtx/AgriConnect.git"
+# Leave empty if the app reads it from Secrets Manager
+openweather_api_key = ""
+
+# Account (for reference — Terraform resolves this automatically)
+aws_account_id = "your-12-digit-account-id"

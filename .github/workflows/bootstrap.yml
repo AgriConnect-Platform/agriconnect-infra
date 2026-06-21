@@ -1,0 +1,302 @@
+name: Bootstrap — Post Terraform Apply
+
+# Run manually after a fresh terraform apply to install ArgoCD,
+# deploy the application, run DB migrations, and wire up CloudFront.
+
+on:
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-south-1
+
+jobs:
+  bootstrap:
+    name: Bootstrap EKS & Deploy via ArgoCD
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # ── Verify ECR images were pushed by CI before attempting deploy ────────
+      - name: Verify ECR images exist
+        run: |
+          FAILED=0
+          for svc in auth marketplace order media notification; do
+            COUNT=$(aws ecr list-images \
+              --repository-name agriconnect-$svc \
+              --region $AWS_REGION \
+              --query "length(imageIds)" \
+              --output text 2>/dev/null || echo "0")
+            if [ "$COUNT" = "0" ] || [ "$COUNT" = "None" ]; then
+              echo "ERROR: No images found in ECR for agriconnect-$svc"
+              FAILED=1
+            else
+              echo "OK: agriconnect-$svc — $COUNT image(s) in ECR"
+            fi
+          done
+          if [ "$FAILED" = "1" ]; then
+            echo "Bootstrap aborted: push images to ECR first by running the CI pipeline."
+            exit 1
+          fi
+
+      # ── Read infra values from SSM ──────────────────────────────────────────
+      - name: Read infra config from SSM
+        run: |
+          CLUSTER=$(aws ssm get-parameter --name /agriconnect/eks-cluster-name --query Parameter.Value --output text)
+          LB_ROLE=$(aws ssm get-parameter --name /agriconnect/eks-lb-controller-role-arn --query Parameter.Value --output text)
+          IRSA_ROLE=$(aws ssm get-parameter --name /agriconnect/eks-services-irsa-role-arn --query Parameter.Value --output text)
+          SUBNETS=$(aws ssm get-parameter --name /agriconnect/public-subnet-ids --query Parameter.Value --output text)
+          CF_ID=$(aws ssm get-parameter --name /agriconnect/cloudfront-distribution-id --query Parameter.Value --output text)
+          echo "CLUSTER=$CLUSTER" >> $GITHUB_ENV
+          echo "LB_ROLE=$LB_ROLE" >> $GITHUB_ENV
+          echo "IRSA_ROLE=$IRSA_ROLE" >> $GITHUB_ENV
+          echo "SUBNETS=$SUBNETS" >> $GITHUB_ENV
+          echo "CF_ID=$CF_ID" >> $GITHUB_ENV
+          echo "Cluster: $CLUSTER | Subnets: $SUBNETS"
+
+      # ── kubectl + helm ──────────────────────────────────────────────────────
+      - name: Configure kubectl
+        run: aws eks update-kubeconfig --name $CLUSTER --region $AWS_REGION
+
+      - uses: azure/setup-helm@v4
+
+      # ── Install AWS Load Balancer Controller ────────────────────────────────
+      - name: Install AWS Load Balancer Controller
+        run: |
+          helm repo add eks https://aws.github.io/eks-charts
+          helm repo update
+
+          kubectl create serviceaccount aws-load-balancer-controller -n kube-system --dry-run=client -o yaml | kubectl apply -f -
+          kubectl annotate serviceaccount aws-load-balancer-controller \
+            -n kube-system \
+            eks.amazonaws.com/role-arn=$LB_ROLE \
+            --overwrite
+
+          helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+            --namespace kube-system \
+            --set clusterName=$CLUSTER \
+            --set serviceAccount.create=false \
+            --set serviceAccount.name=aws-load-balancer-controller \
+            --set region=$AWS_REGION \
+            --set vpcId=$(aws eks describe-cluster --name $CLUSTER --query "cluster.resourcesVpcConfig.vpcId" --output text) \
+            --wait --timeout=5m
+
+          kubectl wait deployment -n kube-system aws-load-balancer-controller \
+            --for=condition=Available --timeout=5m
+
+      # ── Install ArgoCD ──────────────────────────────────────────────────────
+      - name: Install ArgoCD
+        run: |
+          kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+          echo "Waiting for ArgoCD server to be ready..."
+          kubectl wait --for=condition=available --timeout=300s deployment/argocd-server -n argocd
+
+      # ── Give ArgoCD access to the private helm repo ─────────────────────────
+      - name: Configure ArgoCD repo access
+        run: |
+          kubectl apply -f - <<EOF
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: agriconnect-helm-repo
+            namespace: argocd
+            labels:
+              argocd.argoproj.io/secret-type: repository
+          stringData:
+            type: git
+            url: https://github.com/agriconnect-platform/agriconnect-helm.git
+            username: x-access-token
+            password: ${{ secrets.GH_PAT }}
+          EOF
+
+      # ── Apply ArgoCD Application and inject dynamic SSM values ─────────────
+      - name: Apply ArgoCD Application
+        run: |
+          kubectl apply -f - <<EOF
+          apiVersion: argoproj.io/v1alpha1
+          kind: Application
+          metadata:
+            name: agriconnect
+            namespace: argocd
+          spec:
+            project: default
+            source:
+              repoURL: https://github.com/agriconnect-platform/agriconnect-helm.git
+              targetRevision: main
+              path: helm/agriconnect
+              helm:
+                valueFiles:
+                  - values.yaml
+                parameters:
+                  - name: global.irsaRoleArn
+                    value: "$IRSA_ROLE"
+                  - name: ingress.subnets
+                    value: "$SUBNETS"
+            destination:
+              server: https://kubernetes.default.svc
+              namespace: production
+            syncPolicy:
+              automated:
+                prune: true
+                selfHeal: true
+              syncOptions:
+                - CreateNamespace=true
+                - ServerSideApply=true
+          EOF
+
+      # ── Wait for ArgoCD to sync and become healthy ──────────────────────────
+      - name: Wait for ArgoCD sync
+        run: |
+          echo "Waiting for ArgoCD to sync the agriconnect application..."
+          for i in $(seq 1 36); do
+            SYNC=$(kubectl get application agriconnect -n argocd \
+              -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "Unknown")
+            HEALTH=$(kubectl get application agriconnect -n argocd \
+              -o jsonpath='{.status.health.status}' 2>/dev/null || echo "Unknown")
+            echo "Attempt $i/36 — Sync: $SYNC, Health: $HEALTH"
+            if [ "$SYNC" = "Synced" ] && [ "$HEALTH" = "Healthy" ]; then
+              echo "ArgoCD application is synced and healthy!"
+              break
+            fi
+            if [ "$i" = "36" ]; then
+              echo "ERROR: ArgoCD did not sync within 6 minutes"
+              kubectl get application agriconnect -n argocd -o yaml
+              exit 1
+            fi
+            sleep 10
+          done
+
+      # ── Wait for ALB URL ────────────────────────────────────────────────────
+      - name: Wait for ALB DNS
+        run: |
+          echo "Waiting for ALB to be provisioned..."
+          for i in $(seq 1 30); do
+            ALB_URL=$(kubectl get ingress agriconnect-ingress -n production \
+              -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+            if [ -n "$ALB_URL" ]; then
+              echo "ALB_URL=$ALB_URL" >> $GITHUB_ENV
+              echo "ALB ready: $ALB_URL"
+              break
+            fi
+            echo "Attempt $i/30 — ALB not ready yet, waiting 10s..."
+            sleep 10
+          done
+          if [ -z "$ALB_URL" ]; then
+            echo "ERROR: ALB URL not available after 5 minutes"
+            exit 1
+          fi
+
+      # ── Update CloudFront to point at new ALB ───────────────────────────────
+      - name: Update CloudFront origin
+        run: |
+          python3 - <<'PYEOF'
+          import boto3, os
+
+          cf = boto3.client('cloudfront')
+          cf_id = os.environ['CF_ID']
+          alb   = os.environ['ALB_URL']
+
+          resp = cf.get_distribution_config(Id=cf_id)
+          etag = resp['ETag']
+          cfg  = resp['DistributionConfig']
+
+          for origin in cfg['Origins']['Items']:
+              if 'elb.amazonaws.com' in origin.get('DomainName', ''):
+                  print(f"Updating origin {origin['Id']}: {origin['DomainName']} -> {alb}")
+                  origin['DomainName'] = alb
+
+          cf.update_distribution(Id=cf_id, DistributionConfig=cfg, IfMatch=etag)
+          print(f"CloudFront updated. New ALB: {alb}")
+          PYEOF
+
+      # ── Store new ALB URL in SSM ────────────────────────────────────────────
+      - name: Store ALB URL in SSM
+        run: |
+          aws ssm put-parameter \
+            --name /agriconnect/alb-dns-name \
+            --value $ALB_URL \
+            --type String \
+            --overwrite
+          echo "Stored ALB URL in SSM: $ALB_URL"
+
+      # ── Run database migration ──────────────────────────────────────────────
+      - name: Run DB migration
+        run: |
+          AUTH_IMAGE=$(kubectl get deployment auth-service -n production -o jsonpath='{.spec.template.spec.containers[0].image}')
+
+          kubectl delete pod db-migrate -n production --ignore-not-found=true
+
+          kubectl apply -f - <<EOF
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: db-migrate
+            namespace: production
+          spec:
+            serviceAccountName: agriconnect-services
+            restartPolicy: Never
+            containers:
+            - name: migrate
+              image: $AUTH_IMAGE
+              command: ["node", "/app/shared/scripts/migrate.js"]
+              workingDir: /app/services/auth-service
+          EOF
+
+          echo "Waiting for migration to complete..."
+          kubectl wait pod/db-migrate -n production --for=condition=Succeeded --timeout=5m
+          kubectl logs db-migrate -n production
+
+      # ── Run database seed ───────────────────────────────────────────────────
+      - name: Run DB seed
+        run: |
+          AUTH_IMAGE=$(kubectl get deployment auth-service -n production -o jsonpath='{.spec.template.spec.containers[0].image}')
+
+          kubectl delete pod db-seed -n production --ignore-not-found=true
+
+          kubectl apply -f - <<EOF
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: db-seed
+            namespace: production
+          spec:
+            serviceAccountName: agriconnect-services
+            restartPolicy: Never
+            containers:
+            - name: seed
+              image: $AUTH_IMAGE
+              command: ["node", "/app/shared/scripts/seed.js"]
+              workingDir: /app/services/auth-service
+          EOF
+
+          echo "Waiting for seed to complete..."
+          kubectl wait pod/db-seed -n production --for=condition=Succeeded --timeout=5m
+          kubectl logs db-seed -n production
+
+      # ── Cleanup ─────────────────────────────────────────────────────────────
+      - name: Cleanup one-off pods
+        if: always()
+        run: |
+          kubectl delete pod db-migrate db-seed -n production --ignore-not-found=true
+
+      # ── Summary ─────────────────────────────────────────────────────────────
+      - name: Bootstrap complete
+        run: |
+          CF_DOMAIN=$(aws cloudfront get-distribution --id $CF_ID --query "Distribution.DomainName" --output text)
+          echo ""
+          echo "================================================"
+          echo "  Bootstrap complete!"
+          echo "================================================"
+          echo "  App URL   : https://$CF_DOMAIN"
+          echo "  ALB URL   : $ALB_URL"
+          echo "  Login     : admin@agriconnect.com / password123"
+          echo "================================================"
+          echo ""
+          echo "IMPORTANT: Update terraform.tfvars with the new ALB DNS:"
+          echo "  eks_alb_dns_name = \"$ALB_URL\""
