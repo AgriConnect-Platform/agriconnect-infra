@@ -493,43 +493,50 @@ resource "aws_lambda_permission" "buyerbot_api_gw" {
 # ── SSM Parameters (read by CI/CD pipelines — no hardcoding needed) ──────────
 
 resource "aws_ssm_parameter" "farmbot_api_url" {
-  name  = "/agriconnect/farmbot-api-url"
-  type  = "String"
-  value = "${trimsuffix(aws_apigatewayv2_stage.farmbot.invoke_url, "/")}/chat"
+  name      = "/agriconnect/farmbot-api-url"
+  type      = "String"
+  value     = "${trimsuffix(aws_apigatewayv2_stage.farmbot.invoke_url, "/")}/chat"
+  overwrite = true
 }
 
 resource "aws_ssm_parameter" "buyerbot_api_url" {
-  name  = "/agriconnect/buyerbot-api-url"
-  type  = "String"
-  value = "${trimsuffix(aws_apigatewayv2_stage.buyerbot.invoke_url, "/")}/chat"
+  name      = "/agriconnect/buyerbot-api-url"
+  type      = "String"
+  value     = "${trimsuffix(aws_apigatewayv2_stage.buyerbot.invoke_url, "/")}/chat"
+  overwrite = true
 }
 
 resource "aws_ssm_parameter" "cloudfront_distribution_id" {
-  name  = "/agriconnect/cloudfront-distribution-id"
-  type  = "String"
-  value = module.cloudfront.distribution_id
+  name      = "/agriconnect/cloudfront-distribution-id"
+  type      = "String"
+  value     = module.cloudfront.distribution_id
+  overwrite = true
 }
 
 resource "aws_ssm_parameter" "eks_cluster_name" {
-  name  = "/agriconnect/eks-cluster-name"
-  type  = "String"
-  value = module.eks.cluster_name
+  name      = "/agriconnect/eks-cluster-name"
+  type      = "String"
+  value     = module.eks.cluster_name
+  overwrite = true
 }
 
 resource "aws_ssm_parameter" "eks_services_irsa_role_arn" {
-  name  = "/agriconnect/eks-services-irsa-role-arn"
-  type  = "String"
-  value = module.eks.services_irsa_role_arn
+  name      = "/agriconnect/eks-services-irsa-role-arn"
+  type      = "String"
+  value     = module.eks.services_irsa_role_arn
+  overwrite = true
 }
 
 resource "aws_ssm_parameter" "eks_lb_controller_role_arn" {
-  name  = "/agriconnect/eks-lb-controller-role-arn"
-  type  = "String"
-  value = module.eks.lb_controller_role_arn
+  name      = "/agriconnect/eks-lb-controller-role-arn"
+  type      = "String"
+  value     = module.eks.lb_controller_role_arn
+  overwrite = true
 }
 
 resource "aws_ssm_parameter" "public_subnet_ids" {
-  name  = "/agriconnect/public-subnet-ids"
-  type  = "String"
-  value = join(",", module.networking.public_subnet_ids)
+  name      = "/agriconnect/public-subnet-ids"
+  type      = "String"
+  value     = join(",", module.networking.public_subnet_ids)
+  overwrite = true
 }
