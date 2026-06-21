@@ -52,6 +52,11 @@ resource "aws_iam_role_policy_attachment" "node_ssm" {
   role       = aws_iam_role.node.name
 }
 
+resource "aws_iam_role_policy_attachment" "node_cloudwatch" {
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+  role       = aws_iam_role.node.name
+}
+
 # ── EKS Control Plane Log Group ───────────────────────────────────────────────
 resource "aws_cloudwatch_log_group" "eks_cluster" {
   name              = "/aws/eks/${var.name_prefix}-eks/cluster"
@@ -257,6 +262,19 @@ resource "aws_ecr_lifecycle_policy" "services" {
       action = { type = "expire" }
     }]
   })
+}
+
+# ── CloudWatch Container Insights Addon ──────────────────────────────────────
+resource "aws_eks_addon" "cloudwatch_observability" {
+  cluster_name             = aws_eks_cluster.main.name
+  addon_name               = "amazon-cloudwatch-observability"
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  depends_on = [
+    aws_eks_node_group.main,
+    aws_iam_role_policy_attachment.node_cloudwatch,
+  ]
 }
 
 # ── Allow nodes to reach RDS ──────────────────────────────────────────────────

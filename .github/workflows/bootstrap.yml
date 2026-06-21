@@ -379,6 +379,97 @@ jobs:
           fi
           echo "Seed completed successfully!"
 
+      # ── Install Metrics Server + Prometheus + Grafana + Alertmanager ────────
+      - name: Install monitoring stack (Metrics Server + kube-prometheus-stack)
+        run: |
+          # Metrics Server — needed for HPA CPU/memory autoscaling
+          helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo update
+
+          helm upgrade --install metrics-server metrics-server/metrics-server \
+            --namespace kube-system \
+            --set args[0]="--kubelet-insecure-tls" \
+            --wait --timeout=3m
+
+          echo "Metrics Server installed — kubectl top nodes/pods now works"
+
+          EMAIL_SECRET=$(aws secretsmanager get-secret-value \
+            --secret-id agriconnect/dev/email \
+            --query SecretString --output text 2>/dev/null || echo '{}')
+          SMTP_USER=$(echo "$EMAIL_SECRET" | python3 -c \
+            "import sys,json; d=json.load(sys.stdin); print(d.get('user',''))" 2>/dev/null || echo "")
+          SMTP_PASS=$(echo "$EMAIL_SECRET" | python3 -c \
+            "import sys,json; d=json.load(sys.stdin); print(d.get('pass',''))" 2>/dev/null || echo "")
+
+          # Write values using Python to safely inject SMTP credentials
+          python3 - "$SMTP_USER" "$SMTP_PASS" <<'PYEOF'
+          import sys
+          smtp_user = sys.argv[1] if len(sys.argv) > 1 else ""
+          smtp_pass = sys.argv[2] if len(sys.argv) > 2 else ""
+          config = """alertmanager:
+            config:
+              global:
+                smtp_smarthost: 'smtp.gmail.com:587'
+                smtp_from: '__USER__'
+                smtp_auth_username: '__USER__'
+                smtp_auth_password: '__PASS__'
+                smtp_require_tls: true
+              route:
+                group_by: ['alertname', 'namespace']
+                group_wait: 30s
+                group_interval: 5m
+                repeat_interval: 4h
+                receiver: agriconnect-email
+              receivers:
+              - name: agriconnect-email
+                email_configs:
+                - to: asadchamp109@gmail.com
+                  send_resolved: true
+                  headers:
+                    Subject: '[AgriConnect] Monitoring Alert'
+              inhibit_rules:
+              - source_matchers: [severity="critical"]
+                target_matchers: [severity="warning"]
+                equal: [alertname, namespace]
+          grafana:
+            adminPassword: AgriConnect@2024
+            defaultDashboardsEnabled: true
+            service:
+              type: ClusterIP
+          prometheus:
+            prometheusSpec:
+              retention: 7d
+              resources:
+                requests:
+                  memory: 256Mi
+                limits:
+                  memory: 512Mi
+          kubeControllerManager:
+            enabled: false
+          kubeScheduler:
+            enabled: false
+          kubeEtcd:
+            enabled: false
+          """.replace('__USER__', smtp_user).replace('__PASS__', smtp_pass)
+          with open('/tmp/prom-values.yaml', 'w') as f:
+              f.write(config)
+          print("Prometheus values file written.")
+          PYEOF
+
+          helm upgrade --install kube-prometheus-stack \
+            prometheus-community/kube-prometheus-stack \
+            --namespace monitoring --create-namespace \
+            --values /tmp/prom-values.yaml \
+            --wait --timeout=10m \
+            || echo "WARNING: kube-prometheus-stack timed out — check pods in 'monitoring' namespace"
+
+          echo ""
+          echo "=== Monitoring stack installed ==="
+          echo "Grafana:    kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80"
+          echo "Prometheus: kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090"
+          echo "Login:      admin / AgriConnect@2024"
+
       # ── Cleanup ─────────────────────────────────────────────────────────────
       - name: Cleanup one-off pods
         if: always()

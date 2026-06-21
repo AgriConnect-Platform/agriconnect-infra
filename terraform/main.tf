@@ -187,6 +187,83 @@ resource "aws_secretsmanager_secret_version" "s3" {
   })
 }
 
+# ── Monitoring: Alerts SNS Topic + CloudWatch Alarms ─────────────────────────
+
+resource "aws_sns_topic" "monitoring_alerts" {
+  name = "AgriConnect-MonitoringAlerts"
+}
+
+resource "aws_sns_topic_subscription" "monitoring_alerts_email" {
+  count     = var.admin_email != "" ? 1 : 0
+  topic_arn = aws_sns_topic.monitoring_alerts.arn
+  protocol  = "email"
+  endpoint  = var.admin_email
+}
+
+resource "aws_cloudwatch_metric_alarm" "rds_cpu_high" {
+  alarm_name          = "${local.name_prefix}-rds-cpu-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/RDS"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 80
+  alarm_description   = "RDS CPU > 80% for 10 minutes"
+  alarm_actions       = [aws_sns_topic.monitoring_alerts.arn]
+  ok_actions          = [aws_sns_topic.monitoring_alerts.arn]
+  treat_missing_data  = "notBreaching"
+  dimensions          = { DBInstanceIdentifier = module.rds.db_instance.id }
+}
+
+resource "aws_cloudwatch_metric_alarm" "rds_storage_low" {
+  alarm_name          = "${local.name_prefix}-rds-storage-low"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "FreeStorageSpace"
+  namespace           = "AWS/RDS"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 2147483648
+  alarm_description   = "RDS free storage < 2 GB"
+  alarm_actions       = [aws_sns_topic.monitoring_alerts.arn]
+  ok_actions          = [aws_sns_topic.monitoring_alerts.arn]
+  treat_missing_data  = "notBreaching"
+  dimensions          = { DBInstanceIdentifier = module.rds.db_instance.id }
+}
+
+resource "aws_cloudwatch_metric_alarm" "eks_node_cpu_high" {
+  alarm_name          = "${local.name_prefix}-eks-node-cpu-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "node_cpu_utilization"
+  namespace           = "ContainerInsights"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 85
+  alarm_description   = "EKS node CPU > 85% for 10 minutes"
+  alarm_actions       = [aws_sns_topic.monitoring_alerts.arn]
+  ok_actions          = [aws_sns_topic.monitoring_alerts.arn]
+  treat_missing_data  = "notBreaching"
+  dimensions          = { ClusterName = module.eks.cluster_name }
+}
+
+resource "aws_cloudwatch_metric_alarm" "eks_node_memory_high" {
+  alarm_name          = "${local.name_prefix}-eks-node-memory-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "node_memory_utilization"
+  namespace           = "ContainerInsights"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 85
+  alarm_description   = "EKS node memory > 85% for 10 minutes"
+  alarm_actions       = [aws_sns_topic.monitoring_alerts.arn]
+  ok_actions          = [aws_sns_topic.monitoring_alerts.arn]
+  treat_missing_data  = "notBreaching"
+  dimensions          = { ClusterName = module.eks.cluster_name }
+}
+
 # ── SNS Topics ────────────────────────────────────────────────────────────────
 
 resource "aws_sns_topic" "weather_alerts" {

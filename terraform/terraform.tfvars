@@ -13,8 +13,8 @@ rds_username = "admin"
 # rds_password → set via TF_VAR_rds_password (GitHub Secret)
 
 # ── S3 ────────────────────────────────────────────────────────────────────────
-s3_produce_images_bucket  = "agriconnect-produce-images-621594241618"
-s3_delivery_proofs_bucket = "agriconnect-delivery-proofs-621594241618"
+s3_produce_images_bucket  = "agriconnect-produce-images-978594443309"
+s3_delivery_proofs_bucket = "agriconnect-delivery-proofs-978594443309"
 
 # ── JWT ───────────────────────────────────────────────────────────────────────
 # jwt_secret → set via TF_VAR_jwt_secret (GitHub Secret)
@@ -37,6 +37,3 @@ eks_node_desired_size  = 2
 eks_node_min_size      = 2
 eks_node_max_size      = 4
 eks_alb_dns_name       = "placeholder.example.com"
-
-# ── FarmBot ───────────────────────────────────────────────────────────────────
-farmbot_logs_bucket = "agriconnect-farmbot-logs-621594241618"
