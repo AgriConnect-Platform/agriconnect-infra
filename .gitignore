@@ -13,4 +13,4 @@ terraform/tfplan
 terraform/**/tfplan
 terraform/*.tfplan
 terraform/**/*.tfplan
-terraform/terraform.tfvars
+
