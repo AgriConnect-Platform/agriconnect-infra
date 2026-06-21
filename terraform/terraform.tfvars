@@ -37,3 +37,6 @@ eks_node_desired_size  = 2
 eks_node_min_size      = 2
 eks_node_max_size      = 4
 eks_alb_dns_name       = "placeholder.example.com"
+
+# ── FarmBot ───────────────────────────────────────────────────────────────────
+farmbot_logs_bucket = "agriconnect-farmbot-logs-621594241618"
