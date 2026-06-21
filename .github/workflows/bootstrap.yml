@@ -153,17 +153,22 @@ jobs:
       # ── Wait for ArgoCD to sync and become healthy ──────────────────────────
       - name: Wait for ArgoCD sync
         run: |
-          echo "Waiting up to 15 minutes for ArgoCD application to become healthy..."
+          echo "Waiting for ArgoCD application to become healthy (max 5 min)..."
           HEALTHY=false
-          for i in $(seq 1 90); do
+          for i in $(seq 1 30); do
             SYNC=$(kubectl get application agriconnect -n argocd \
               -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "Unknown")
             HEALTH=$(kubectl get application agriconnect -n argocd \
               -o jsonpath='{.status.health.status}' 2>/dev/null || echo "Unknown")
-            echo "Attempt $i/90 — Sync: $SYNC, Health: $HEALTH"
+            echo "Attempt $i/30 — Sync: $SYNC, Health: $HEALTH"
             if [ "$SYNC" = "Synced" ] && [ "$HEALTH" = "Healthy" ]; then
               echo "ArgoCD application is synced and healthy!"
               HEALTHY=true
+              break
+            fi
+            # Fail fast — Degraded means pods are crashing, more waiting won't help
+            if [ "$HEALTH" = "Degraded" ]; then
+              echo "Health is Degraded — breaking early to dump diagnostics"
               break
             fi
             sleep 10
@@ -171,21 +176,35 @@ jobs:
 
           if [ "$HEALTHY" = "false" ]; then
             echo ""
-            echo "WARNING: ArgoCD health did not reach Healthy within 15 min. Dumping diagnostics..."
+            echo "============================================================"
+            echo " DIAGNOSTICS"
+            echo "============================================================"
             echo ""
-            echo "=== Pods in production namespace ==="
+            echo "--- All pods (production) ---"
             kubectl get pods -n production -o wide
             echo ""
-            echo "=== Deployments ==="
+            echo "--- Deployments ---"
             kubectl get deployments -n production
             echo ""
-            echo "=== Pod describe (Events section) ==="
-            kubectl describe pods -n production 2>/dev/null | grep -A 20 "^Events:" || true
+            echo "--- Pod events (all) ---"
+            kubectl get events -n production --sort-by='.lastTimestamp' | tail -40
             echo ""
-            echo "=== auth-service logs (last 30 lines) ==="
-            kubectl logs -n production -l app=auth-service --tail=30 2>/dev/null || echo "(no logs yet)"
-            echo ""
-            echo "Continuing bootstrap — DB migration may fix readiness..."
+            for svc in auth marketplace order media notification; do
+              echo "--- Logs: $svc-service (last 40 lines) ---"
+              kubectl logs -n production -l app=$svc-service --tail=40 --all-containers 2>/dev/null \
+                || echo "(no logs — pod may not have started)"
+              echo ""
+            done
+            echo "--- Describe first crashing pod ---"
+            CRASH_POD=$(kubectl get pods -n production --field-selector=status.phase!=Running \
+              -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+            if [ -n "$CRASH_POD" ]; then
+              kubectl describe pod $CRASH_POD -n production
+            else
+              kubectl describe pods -n production | grep -A 5 "State:\|Reason:\|Message:"
+            fi
+            echo "============================================================"
+            exit 1
           fi
 
       # ── Wait for ALB URL ────────────────────────────────────────────────────
