@@ -13,8 +13,8 @@ rds_username = "admin"
 # rds_password → set via TF_VAR_rds_password (GitHub Secret)
 
 # ── S3 ────────────────────────────────────────────────────────────────────────
-s3_produce_images_bucket  = "agriconnect-produce-images-978594443309"
-s3_delivery_proofs_bucket = "agriconnect-delivery-proofs-978594443309"
+s3_produce_images_bucket  = "agriconnect-produce-images-621594241618"
+s3_delivery_proofs_bucket = "agriconnect-delivery-proofs-621594241618"
 
 # ── JWT ───────────────────────────────────────────────────────────────────────
 # jwt_secret → set via TF_VAR_jwt_secret (GitHub Secret)
@@ -36,4 +36,4 @@ eks_node_instance_type = "t3.medium"
 eks_node_desired_size  = 2
 eks_node_min_size      = 2
 eks_node_max_size      = 4
-eks_alb_dns_name       = "k8s-producti-agriconn-86a24bc09e-535419152.ap-south-1.elb.amazonaws.com"
+eks_alb_dns_name       = "placeholder.example.com"
