@@ -269,6 +269,7 @@ resource "aws_lambda_function" "weather_alert" {
     variables = {
       SNS_TOPIC_ARN    = aws_sns_topic.weather_alerts.arn
       EVENTS_TOPIC_ARN = aws_sns_topic.events.arn
+      ALB_URL          = var.eks_alb_dns_name
     }
   }
 }
