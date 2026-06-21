@@ -271,9 +271,12 @@ jobs:
       # ── Run database migration ──────────────────────────────────────────────
       - name: Run DB migration
         run: |
-          AUTH_IMAGE=$(kubectl get deployment auth-service -n production -o jsonpath='{.spec.template.spec.containers[0].image}')
+          AUTH_IMAGE=$(kubectl get deployment auth-service -n production \
+            -o jsonpath='{.spec.template.spec.containers[0].image}')
+          echo "Migration image: $AUTH_IMAGE"
 
           kubectl delete pod db-migrate -n production --ignore-not-found=true
+          sleep 3
 
           kubectl apply -f - <<EOF
           apiVersion: v1
@@ -288,19 +291,47 @@ jobs:
             - name: migrate
               image: $AUTH_IMAGE
               command: ["node", "/app/shared/scripts/migrate.js"]
-              workingDir: /app/services/auth-service
+              envFrom:
+              - configMapRef:
+                  name: agriconnect-config
+              env:
+              - name: AWS_REGION
+                value: "$AWS_REGION"
+              - name: AWS_DEFAULT_REGION
+                value: "$AWS_REGION"
           EOF
 
-          echo "Waiting for migration to complete..."
-          kubectl wait pod/db-migrate -n production --for=condition=Succeeded --timeout=5m
-          kubectl logs db-migrate -n production
+          echo "Polling migration pod phase..."
+          for i in \$(seq 1 36); do
+            PHASE=\$(kubectl get pod db-migrate -n production \
+              -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")
+            echo "Attempt \$i/36 — Phase: \$PHASE"
+            if [ "\$PHASE" = "Succeeded" ] || [ "\$PHASE" = "Failed" ]; then
+              break
+            fi
+            sleep 10
+          done
+
+          echo "=== Migration logs ==="
+          kubectl logs db-migrate -n production 2>/dev/null || echo "(no logs)"
+
+          FINAL=\$(kubectl get pod db-migrate -n production \
+            -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")
+          if [ "\$FINAL" != "Succeeded" ]; then
+            echo "ERROR: Migration pod phase is '\$FINAL'"
+            kubectl describe pod db-migrate -n production
+            exit 1
+          fi
+          echo "Migration completed successfully!"
 
       # ── Run database seed ───────────────────────────────────────────────────
       - name: Run DB seed
         run: |
-          AUTH_IMAGE=$(kubectl get deployment auth-service -n production -o jsonpath='{.spec.template.spec.containers[0].image}')
+          AUTH_IMAGE=$(kubectl get deployment auth-service -n production \
+            -o jsonpath='{.spec.template.spec.containers[0].image}')
 
           kubectl delete pod db-seed -n production --ignore-not-found=true
+          sleep 3
 
           kubectl apply -f - <<EOF
           apiVersion: v1
@@ -315,12 +346,38 @@ jobs:
             - name: seed
               image: $AUTH_IMAGE
               command: ["node", "/app/shared/scripts/seed.js"]
-              workingDir: /app/services/auth-service
+              envFrom:
+              - configMapRef:
+                  name: agriconnect-config
+              env:
+              - name: AWS_REGION
+                value: "$AWS_REGION"
+              - name: AWS_DEFAULT_REGION
+                value: "$AWS_REGION"
           EOF
 
-          echo "Waiting for seed to complete..."
-          kubectl wait pod/db-seed -n production --for=condition=Succeeded --timeout=5m
-          kubectl logs db-seed -n production
+          echo "Polling seed pod phase..."
+          for i in \$(seq 1 36); do
+            PHASE=\$(kubectl get pod db-seed -n production \
+              -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")
+            echo "Attempt \$i/36 — Phase: \$PHASE"
+            if [ "\$PHASE" = "Succeeded" ] || [ "\$PHASE" = "Failed" ]; then
+              break
+            fi
+            sleep 10
+          done
+
+          echo "=== Seed logs ==="
+          kubectl logs db-seed -n production 2>/dev/null || echo "(no logs)"
+
+          FINAL=\$(kubectl get pod db-seed -n production \
+            -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")
+          if [ "\$FINAL" != "Succeeded" ]; then
+            echo "ERROR: Seed pod phase is '\$FINAL'"
+            kubectl describe pod db-seed -n production
+            exit 1
+          fi
+          echo "Seed completed successfully!"
 
       # ── Cleanup ─────────────────────────────────────────────────────────────
       - name: Cleanup one-off pods
