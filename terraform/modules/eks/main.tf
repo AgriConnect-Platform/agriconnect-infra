@@ -266,8 +266,8 @@ resource "aws_ecr_lifecycle_policy" "services" {
 
 # ── CloudWatch Container Insights Addon ──────────────────────────────────────
 resource "aws_eks_addon" "cloudwatch_observability" {
-  cluster_name             = aws_eks_cluster.main.name
-  addon_name               = "amazon-cloudwatch-observability"
+  cluster_name                = aws_eks_cluster.main.name
+  addon_name                  = "amazon-cloudwatch-observability"
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
 
