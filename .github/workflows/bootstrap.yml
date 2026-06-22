@@ -143,6 +143,16 @@ jobs:
                     value: "$IRSA_ROLE"
                   - name: ingress.subnets
                     value: "$SUBNETS"
+                  - name: services.auth.replicas
+                    value: "1"
+                  - name: services.marketplace.replicas
+                    value: "1"
+                  - name: services.order.replicas
+                    value: "1"
+                  - name: services.media.replicas
+                    value: "1"
+                  - name: services.notification.replicas
+                    value: "1"
             destination:
               server: https://kubernetes.default.svc
               namespace: production
