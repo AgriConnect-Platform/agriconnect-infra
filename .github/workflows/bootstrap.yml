@@ -344,8 +344,8 @@ jobs:
           print(f"CloudFront updated. New ALB: {alb}")
           PYEOF
 
-      # ── Store new ALB URL in SSM ────────────────────────────────────────────
-      - name: Store ALB URL in SSM
+      # ── Store new ALB URL in SSM + update Lambda env vars ──────────────────
+      - name: Store ALB URL in SSM and update Lambdas
         run: |
           aws ssm put-parameter \
             --name /agriconnect/alb-dns-name \
@@ -353,6 +353,21 @@ jobs:
             --type String \
             --overwrite
           echo "Stored ALB URL in SSM: $ALB_URL"
+
+          # Update weather-alert-processor and buyerbot-chatbot with real ALB URL
+          # so terraform.tfvars never needs manual editing after destroy/apply
+          for FN in weather-alert-processor buyerbot-chatbot; do
+            CURRENT=$(aws lambda get-function-configuration \
+              --function-name $FN --region $AWS_REGION \
+              --query 'Environment.Variables' --output json 2>/dev/null || echo '{}')
+            UPDATED=$(echo "$CURRENT" | python3 -c \
+              "import sys,json,os; e=json.load(sys.stdin); e['ALB_URL']=os.environ['ALB_URL']; print(json.dumps({'Variables':e}))")
+            aws lambda update-function-configuration \
+              --function-name $FN \
+              --environment "$UPDATED" \
+              --region $AWS_REGION > /dev/null
+            echo "Updated $FN ALB_URL -> $ALB_URL"
+          done
 
       # ── Run database migration ──────────────────────────────────────────────
       - name: Run DB migration
