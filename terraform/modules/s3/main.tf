@@ -39,18 +39,3 @@ resource "aws_s3_bucket_cors_configuration" "produce_images" {
     max_age_seconds = 3000
   }
 }
-
-# ── Delivery Proofs Bucket (private) ─────────────────────────────────────────
-resource "aws_s3_bucket" "delivery_proofs" {
-  bucket = var.delivery_proofs_bucket
-
-  tags = { Name = var.delivery_proofs_bucket, Purpose = "delivery-proofs" }
-}
-
-resource "aws_s3_bucket_public_access_block" "delivery_proofs" {
-  bucket                  = aws_s3_bucket.delivery_proofs.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}

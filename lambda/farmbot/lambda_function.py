@@ -46,6 +46,7 @@ def lambda_handler(event, context):
         message    = body.get("message", "").strip()
         image_b64  = body.get("image")        # raw base64, no data: prefix
         history    = body.get("history", [])  # [{role:"user"|"assistant", text:"..."}]
+        history    = history[-20:]  # keep last 10 exchanges to avoid token overflow
 
         # Build conversation history
         messages = []

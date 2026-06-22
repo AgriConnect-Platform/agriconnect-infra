@@ -38,9 +38,8 @@ module "rds" {
 }
 
 module "s3" {
-  source                 = "./modules/s3"
-  produce_images_bucket  = var.s3_produce_images_bucket
-  delivery_proofs_bucket = var.s3_delivery_proofs_bucket
+  source                = "./modules/s3"
+  produce_images_bucket = var.s3_produce_images_bucket
 }
 
 module "eks" {
@@ -181,9 +180,8 @@ resource "aws_secretsmanager_secret" "s3" {
 resource "aws_secretsmanager_secret_version" "s3" {
   secret_id = aws_secretsmanager_secret.s3.id
   secret_string = jsonencode({
-    produce_bucket  = var.s3_produce_images_bucket
-    delivery_bucket = var.s3_delivery_proofs_bucket
-    region          = var.aws_region
+    produce_bucket = var.s3_produce_images_bucket
+    region         = var.aws_region
   })
 }
 

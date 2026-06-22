@@ -47,6 +47,7 @@ def lambda_handler(event, context):
         message = body.get("message", "").strip()
         token   = body.get("token", "")
         history = body.get("history", [])  # [{role:"user"|"assistant", text:"..."}]
+        history = history[-20:]  # keep last 10 exchanges to avoid token overflow
 
         # Fetch live marketplace data
         alb_url  = os.environ.get("ALB_URL", "")
@@ -57,20 +58,24 @@ def lambda_handler(event, context):
         if listings:
             system_prompt += f"\n\n=== LIVE MARKETPLACE ({len(listings)} listings) ===\n"
             for item in listings[:15]:
-                name  = item.get("title") or item.get("produce_name", "Unknown")
-                price = item.get("price_per_unit", item.get("price", "N/A"))
-                qty   = item.get("quantity_available", item.get("quantity", "N/A"))
+                name  = item.get("product_name", "Unknown")
+                price = item.get("price", "N/A")
+                qty   = item.get("quantity", "N/A")
                 unit  = item.get("unit", "kg")
                 cat   = item.get("category", "")
-                farmer = item.get("farmer_name", "")
+                farmer_obj = item.get("Farmer") or {}
+                farm_name  = farmer_obj.get("farm_name", "")
+                location   = farmer_obj.get("location", "")
                 line = f"• {name}"
                 if cat:
                     line += f" [{cat}]"
                 line += f": ₹{price}/{unit}, {qty} {unit} available"
-                if farmer:
-                    line += f" from {farmer}"
+                if farm_name:
+                    line += f" | Farm: {farm_name}"
+                if location:
+                    line += f" ({location})"
                 system_prompt += line + "\n"
-            system_prompt += "\nUse this LIVE data when answering questions about availability and prices."
+            system_prompt += "\nUse this LIVE data. Always include the farm name and location when answering questions about specific produce."
         else:
             system_prompt += "\n\n(Live marketplace data unavailable — using general knowledge for price guidance.)"
 

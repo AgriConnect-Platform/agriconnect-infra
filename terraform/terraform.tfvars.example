@@ -30,8 +30,7 @@ rds_username          = "admin"
 rds_password          = "Sixninesixtynine"
 
 # S3
-s3_produce_images_bucket  = "agriconnect-produce-images"
-s3_delivery_proofs_bucket = "agriconnect-delivery-proofs"
+s3_produce_images_bucket = "agriconnect-produce-images"
 
 # Existing AWS resources (imported — must match exact names in AWS)
 lambda_function_name         = "weather-alert-processor"

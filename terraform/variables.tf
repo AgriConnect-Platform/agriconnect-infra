@@ -52,9 +52,6 @@ variable "s3_produce_images_bucket" {
   type = string
 }
 
-variable "s3_delivery_proofs_bucket" {
-  type = string
-}
 
 # ── FarmBot ───────────────────────────────────────────────────────────────────
 variable "farmbot_logs_bucket" {
