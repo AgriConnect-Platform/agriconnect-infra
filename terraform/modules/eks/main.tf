@@ -110,9 +110,9 @@ resource "aws_eks_node_group" "main" {
   ]
 
   tags = {
-    Name                                                        = "${var.name_prefix}-nodes"
-    "k8s.io/cluster-autoscaler/enabled"                         = "true"
-    "k8s.io/cluster-autoscaler/${var.name_prefix}-eks"          = "owned"
+    Name                                               = "${var.name_prefix}-nodes"
+    "k8s.io/cluster-autoscaler/enabled"                = "true"
+    "k8s.io/cluster-autoscaler/${var.name_prefix}-eks" = "owned"
   }
 }
 
@@ -327,7 +327,7 @@ resource "aws_iam_policy" "cluster_autoscaler" {
         Resource = ["*"]
         Condition = {
           StringEquals = {
-            "aws:ResourceTag/k8s.io/cluster-autoscaler/enabled" = "true"
+            "aws:ResourceTag/k8s.io/cluster-autoscaler/enabled"                = "true"
             "aws:ResourceTag/k8s.io/cluster-autoscaler/${var.name_prefix}-eks" = "owned"
           }
         }
