@@ -501,6 +501,7 @@ jobs:
 
           helm upgrade --install cluster-autoscaler autoscaler/cluster-autoscaler \
             --namespace kube-system \
+            --set image.tag=v1.31.0 \
             --set autoDiscovery.clusterName=$CLUSTER \
             --set awsRegion=$AWS_REGION \
             --set rbac.serviceAccount.name=cluster-autoscaler \
