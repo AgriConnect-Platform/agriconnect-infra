@@ -35,4 +35,4 @@ eks_node_instance_type = "t3.medium"
 eks_node_desired_size  = 2
 eks_node_min_size      = 2
 eks_node_max_size      = 4
-eks_alb_dns_name       = "k8s-producti-agriconn-86a24bc09e-951364039.ap-south-1.elb.amazonaws.com"
+eks_alb_dns_name       = "k8s-producti-agriconn-86a24bc09e-1038615273.ap-south-1.elb.amazonaws.com"
