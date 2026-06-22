@@ -121,21 +121,22 @@ jobs:
             password: ${{ secrets.GH_PAT }}
           EOF
 
-      # ── Apply ArgoCD Applications (prod + dev) ─────────────────────────────
+      # ── Apply ArgoCD Applications ───────────────────────────────────────────
       - name: Apply ArgoCD Applications
         run: |
-          # Production app — watches prod branch of helm repo → production namespace
+          # Main app — watches dev (default) branch → production namespace
+          # This is the continuous deployment target; every CI push auto-deploys here
           kubectl apply -f - <<EOF
           apiVersion: argoproj.io/v1alpha1
           kind: Application
           metadata:
-            name: agriconnect-prod
+            name: agriconnect
             namespace: argocd
           spec:
             project: default
             source:
               repoURL: https://github.com/AgriConnect-Platform/agriconnect-helm.git
-              targetRevision: prod
+              targetRevision: dev
               path: helm/agriconnect
               helm:
                 valueFiles:
@@ -157,32 +158,31 @@ jobs:
                 - ServerSideApply=true
           EOF
 
-          # Dev app — watches dev branch of helm repo → dev namespace
+          # Prod app — watches prod branch → prod namespace, uses values-prod.yaml
+          # Stays OutOfSync/Missing until the prod branch is created in the helm repo
           kubectl apply -f - <<EOF
           apiVersion: argoproj.io/v1alpha1
           kind: Application
           metadata:
-            name: agriconnect-dev
+            name: agriconnect-prod
             namespace: argocd
           spec:
             project: default
             source:
               repoURL: https://github.com/AgriConnect-Platform/agriconnect-helm.git
-              targetRevision: dev
+              targetRevision: prod
               path: helm/agriconnect
               helm:
                 valueFiles:
-                  - values.yaml
+                  - values-prod.yaml
                 parameters:
                   - name: global.irsaRoleArn
                     value: "$IRSA_ROLE"
                   - name: ingress.subnets
                     value: "$SUBNETS"
-                  - name: global.namespace
-                    value: "dev"
             destination:
               server: https://kubernetes.default.svc
-              namespace: dev
+              namespace: prod
             syncPolicy:
               automated:
                 prune: true
@@ -208,27 +208,22 @@ jobs:
             echo "(no logs)"
 
           echo "=== Application conditions ==="
-          kubectl get application agriconnect-prod -n argocd \
+          kubectl get application agriconnect -n argocd \
             -o jsonpath='{.status.conditions}' 2>/dev/null | tr ',' '\n' || echo "(no conditions)"
 
           echo "=== Application operationState ==="
-          kubectl get application agriconnect-prod -n argocd \
+          kubectl get application agriconnect -n argocd \
             -o jsonpath='{.status.operationState}' 2>/dev/null | tr ',' '\n' || echo "(none)"
 
       # ── Force ArgoCD to refresh and sync immediately ────────────────────────
       - name: Force ArgoCD sync
         run: |
-          echo "Triggering hard refresh on both apps..."
-          kubectl annotate application agriconnect-prod -n argocd \
-            argocd.argoproj.io/refresh=hard --overwrite
-          kubectl annotate application agriconnect-dev -n argocd \
+          echo "Triggering hard refresh on agriconnect app..."
+          kubectl annotate application agriconnect -n argocd \
             argocd.argoproj.io/refresh=hard --overwrite
           sleep 30
           echo "Triggering immediate sync operation (bypasses 3-min automated loop)..."
-          kubectl patch application agriconnect-prod -n argocd \
-            -p '{"operation": {"sync": {"prune": true, "syncOptions": ["CreateNamespace=true", "ServerSideApply=true"]}}}' \
-            --type merge
-          kubectl patch application agriconnect-dev -n argocd \
+          kubectl patch application agriconnect -n argocd \
             -p '{"operation": {"sync": {"prune": true, "syncOptions": ["CreateNamespace=true", "ServerSideApply=true"]}}}' \
             --type merge
           echo "Waiting 60s for sync to complete initial resources..."
@@ -240,9 +235,9 @@ jobs:
           echo "Waiting for ArgoCD application to become healthy (max 5 min)..."
           HEALTHY=false
           for i in $(seq 1 30); do
-            SYNC=$(kubectl get application agriconnect-prod -n argocd \
+            SYNC=$(kubectl get application agriconnect -n argocd \
               -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "Unknown")
-            HEALTH=$(kubectl get application agriconnect-prod -n argocd \
+            HEALTH=$(kubectl get application agriconnect -n argocd \
               -o jsonpath='{.status.health.status}' 2>/dev/null || echo "Unknown")
             echo "Attempt $i/30 — Sync: $SYNC, Health: $HEALTH"
             if [ "$SYNC" = "Synced" ] && [ "$HEALTH" = "Healthy" ]; then
@@ -266,7 +261,7 @@ jobs:
             echo "============================================================"
             echo ""
             echo "--- ArgoCD app status ---"
-            kubectl get application agriconnect-prod -n argocd -o yaml | grep -A 20 "status:"
+            kubectl get application agriconnect -n argocd -o yaml | grep -A 20 "status:"
             echo ""
             echo "--- All pods (production) ---"
             kubectl get pods -n production -o wide
