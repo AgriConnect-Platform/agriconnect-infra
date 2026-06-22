@@ -188,11 +188,20 @@ jobs:
                 - ServerSideApply=true
           EOF
 
+      # ── Force ArgoCD to refresh immediately (don't wait for 3-min poll) ────
+      - name: Force ArgoCD refresh
+        run: |
+          echo "Triggering immediate hard refresh on both apps..."
+          kubectl annotate application agriconnect-prod -n argocd \
+            argocd.argoproj.io/refresh=hard --overwrite
+          kubectl annotate application agriconnect-dev -n argocd \
+            argocd.argoproj.io/refresh=hard --overwrite
+          echo "Waiting 60s for ArgoCD to fetch repo and compute diff..."
+          sleep 60
+
       # ── Wait for ArgoCD to sync and become healthy ──────────────────────────
       - name: Wait for ArgoCD sync
         run: |
-          echo "Giving ArgoCD 30s to start syncing..."
-          sleep 30
           echo "Waiting for ArgoCD application to become healthy (max 5 min)..."
           HEALTHY=false
           for i in $(seq 1 30); do
@@ -220,6 +229,9 @@ jobs:
             echo "============================================================"
             echo " DIAGNOSTICS"
             echo "============================================================"
+            echo ""
+            echo "--- ArgoCD app status ---"
+            kubectl get application agriconnect-prod -n argocd -o yaml | grep -A 20 "status:"
             echo ""
             echo "--- All pods (production) ---"
             kubectl get pods -n production -o wide
