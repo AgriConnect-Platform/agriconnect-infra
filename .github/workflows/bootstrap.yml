@@ -176,6 +176,8 @@ jobs:
                     value: "$IRSA_ROLE"
                   - name: ingress.subnets
                     value: "$SUBNETS"
+                  - name: global.namespace
+                    value: "dev"
             destination:
               server: https://kubernetes.default.svc
               namespace: dev
@@ -211,15 +213,23 @@ jobs:
           kubectl get application agriconnect-prod -n argocd \
             -o jsonpath='{.status.operationState}' 2>/dev/null | tr ',' '\n' || echo "(none)"
 
-      # ── Force ArgoCD to refresh immediately (don't wait for 3-min poll) ────
-      - name: Force ArgoCD refresh
+      # ── Force ArgoCD to refresh and sync immediately ────────────────────────
+      - name: Force ArgoCD sync
         run: |
-          echo "Triggering immediate hard refresh on both apps..."
+          echo "Triggering hard refresh on both apps..."
           kubectl annotate application agriconnect-prod -n argocd \
             argocd.argoproj.io/refresh=hard --overwrite
           kubectl annotate application agriconnect-dev -n argocd \
             argocd.argoproj.io/refresh=hard --overwrite
-          echo "Waiting 60s for ArgoCD to fetch repo and compute diff..."
+          sleep 30
+          echo "Triggering immediate sync operation (bypasses 3-min automated loop)..."
+          kubectl patch application agriconnect-prod -n argocd \
+            -p '{"operation": {"sync": {"prune": true, "syncOptions": ["CreateNamespace=true", "ServerSideApply=true"]}}}' \
+            --type merge
+          kubectl patch application agriconnect-dev -n argocd \
+            -p '{"operation": {"sync": {"prune": true, "syncOptions": ["CreateNamespace=true", "ServerSideApply=true"]}}}' \
+            --type merge
+          echo "Waiting 60s for sync to complete initial resources..."
           sleep 60
 
       # ── Wait for ArgoCD to sync and become healthy ──────────────────────────
