@@ -188,6 +188,29 @@ jobs:
                 - ServerSideApply=true
           EOF
 
+      # ── ArgoCD diagnostics — repo access + app conditions ───────────────────
+      - name: ArgoCD diagnostics
+        run: |
+          echo "=== Repo secret ==="
+          kubectl get secret agriconnect-helm-repo -n argocd \
+            -o jsonpath='{.data.url}' | base64 -d && echo ""
+
+          echo "=== Repo-server logs (last 30 lines) ==="
+          kubectl logs -n argocd deployment/argocd-repo-server --tail=30 2>/dev/null || echo "(no logs)"
+
+          echo "=== App-controller logs (last 30 lines) ==="
+          kubectl logs -n argocd statefulset/argocd-application-controller --tail=30 2>/dev/null || \
+            kubectl logs -n argocd -l app.kubernetes.io/name=argocd-application-controller --tail=30 2>/dev/null || \
+            echo "(no logs)"
+
+          echo "=== Application conditions ==="
+          kubectl get application agriconnect-prod -n argocd \
+            -o jsonpath='{.status.conditions}' 2>/dev/null | tr ',' '\n' || echo "(no conditions)"
+
+          echo "=== Application operationState ==="
+          kubectl get application agriconnect-prod -n argocd \
+            -o jsonpath='{.status.operationState}' 2>/dev/null | tr ',' '\n' || echo "(none)"
+
       # ── Force ArgoCD to refresh immediately (don't wait for 3-min poll) ────
       - name: Force ArgoCD refresh
         run: |
