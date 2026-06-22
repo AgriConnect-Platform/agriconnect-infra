@@ -235,13 +235,13 @@ resource "aws_cloudwatch_metric_alarm" "rds_storage_low" {
 resource "aws_cloudwatch_metric_alarm" "eks_node_cpu_high" {
   alarm_name          = "${local.name_prefix}-eks-node-cpu-high"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
+  evaluation_periods  = 1
   metric_name         = "node_cpu_utilization"
   namespace           = "ContainerInsights"
-  period              = 300
+  period              = 60
   statistic           = "Average"
-  threshold           = 85
-  alarm_description   = "EKS node CPU > 85% for 10 minutes"
+  threshold           = 30
+  alarm_description   = "EKS node CPU > 30% for 1 minute (demo threshold)"
   alarm_actions       = [aws_sns_topic.monitoring_alerts.arn]
   ok_actions          = [aws_sns_topic.monitoring_alerts.arn]
   treat_missing_data  = "notBreaching"
@@ -251,13 +251,29 @@ resource "aws_cloudwatch_metric_alarm" "eks_node_cpu_high" {
 resource "aws_cloudwatch_metric_alarm" "eks_node_memory_high" {
   alarm_name          = "${local.name_prefix}-eks-node-memory-high"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
+  evaluation_periods  = 1
   metric_name         = "node_memory_utilization"
   namespace           = "ContainerInsights"
-  period              = 300
+  period              = 60
   statistic           = "Average"
-  threshold           = 85
-  alarm_description   = "EKS node memory > 85% for 10 minutes"
+  threshold           = 40
+  alarm_description   = "EKS node memory > 40% for 1 minute (demo threshold)"
+  alarm_actions       = [aws_sns_topic.monitoring_alerts.arn]
+  ok_actions          = [aws_sns_topic.monitoring_alerts.arn]
+  treat_missing_data  = "notBreaching"
+  dimensions          = { ClusterName = module.eks.cluster_name }
+}
+
+resource "aws_cloudwatch_metric_alarm" "eks_pod_restart_high" {
+  alarm_name          = "${local.name_prefix}-eks-pod-restart-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "pod_number_of_container_restarts"
+  namespace           = "ContainerInsights"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 1
+  alarm_description   = "EKS pod restart count > 1 in 5 minutes — possible crash loop"
   alarm_actions       = [aws_sns_topic.monitoring_alerts.arn]
   ok_actions          = [aws_sns_topic.monitoring_alerts.arn]
   treat_missing_data  = "notBreaching"
@@ -616,5 +632,12 @@ resource "aws_ssm_parameter" "public_subnet_ids" {
   name      = "/agriconnect/public-subnet-ids"
   type      = "String"
   value     = join(",", module.networking.public_subnet_ids)
+  overwrite = true
+}
+
+resource "aws_ssm_parameter" "cluster_autoscaler_role_arn" {
+  name      = "/agriconnect/cluster-autoscaler-role-arn"
+  type      = "String"
+  value     = module.eks.cluster_autoscaler_role_arn
   overwrite = true
 }

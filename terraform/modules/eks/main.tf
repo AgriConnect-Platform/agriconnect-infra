@@ -109,7 +109,11 @@ resource "aws_eks_node_group" "main" {
     aws_iam_role_policy_attachment.node_ecr,
   ]
 
-  tags = { Name = "${var.name_prefix}-nodes" }
+  tags = {
+    Name                                                        = "${var.name_prefix}-nodes"
+    "k8s.io/cluster-autoscaler/enabled"                         = "true"
+    "k8s.io/cluster-autoscaler/${var.name_prefix}-eks"          = "owned"
+  }
 }
 
 # ── OIDC Provider (for IRSA) ──────────────────────────────────────────────────
@@ -288,4 +292,71 @@ resource "aws_security_group_rule" "nodes_to_rds" {
   description              = "EKS nodes to RDS"
 
   lifecycle { ignore_changes = [source_security_group_id] }
+}
+
+# ── Cluster Autoscaler IAM Policy ─────────────────────────────────────────────
+resource "aws_iam_policy" "cluster_autoscaler" {
+  name        = "${var.name_prefix}-cluster-autoscaler-policy"
+  description = "Cluster Autoscaler policy for ASG management"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "autoscaling:DescribeAutoScalingGroups",
+          "autoscaling:DescribeAutoScalingInstances",
+          "autoscaling:DescribeLaunchConfigurations",
+          "autoscaling:DescribeScalingActivities",
+          "autoscaling:DescribeTags",
+          "ec2:DescribeImages",
+          "ec2:DescribeInstanceTypes",
+          "ec2:DescribeLaunchTemplateVersions",
+          "ec2:GetInstanceTypesFromInstanceRequirements",
+          "eks:DescribeNodegroup"
+        ]
+        Resource = ["*"]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "autoscaling:SetDesiredCapacity",
+          "autoscaling:TerminateInstanceInAutoScalingGroup"
+        ]
+        Resource = ["*"]
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/k8s.io/cluster-autoscaler/enabled" = "true"
+            "aws:ResourceTag/k8s.io/cluster-autoscaler/${var.name_prefix}-eks" = "owned"
+          }
+        }
+      }
+    ]
+  })
+}
+
+# ── Cluster Autoscaler IRSA Role ──────────────────────────────────────────────
+resource "aws_iam_role" "cluster_autoscaler" {
+  name = "${var.name_prefix}-cluster-autoscaler-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Principal = { Federated = aws_iam_openid_connect_provider.eks.arn }
+      Condition = {
+        StringEquals = {
+          "${local.oidc_issuer}:sub" = "system:serviceaccount:kube-system:cluster-autoscaler"
+          "${local.oidc_issuer}:aud" = "sts.amazonaws.com"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
+  policy_arn = aws_iam_policy.cluster_autoscaler.arn
+  role       = aws_iam_role.cluster_autoscaler.name
 }

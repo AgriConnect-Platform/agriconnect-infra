@@ -50,11 +50,13 @@ jobs:
           CLUSTER=$(aws ssm get-parameter --name /agriconnect/eks-cluster-name --query Parameter.Value --output text)
           LB_ROLE=$(aws ssm get-parameter --name /agriconnect/eks-lb-controller-role-arn --query Parameter.Value --output text)
           IRSA_ROLE=$(aws ssm get-parameter --name /agriconnect/eks-services-irsa-role-arn --query Parameter.Value --output text)
+          CA_ROLE=$(aws ssm get-parameter --name /agriconnect/cluster-autoscaler-role-arn --query Parameter.Value --output text)
           SUBNETS=$(aws ssm get-parameter --name /agriconnect/public-subnet-ids --query Parameter.Value --output text)
           CF_ID=$(aws ssm get-parameter --name /agriconnect/cloudfront-distribution-id --query Parameter.Value --output text)
           echo "CLUSTER=$CLUSTER" >> $GITHUB_ENV
           echo "LB_ROLE=$LB_ROLE" >> $GITHUB_ENV
           echo "IRSA_ROLE=$IRSA_ROLE" >> $GITHUB_ENV
+          echo "CA_ROLE=$CA_ROLE" >> $GITHUB_ENV
           echo "SUBNETS=$SUBNETS" >> $GITHUB_ENV
           echo "CF_ID=$CF_ID" >> $GITHUB_ENV
           echo "Cluster: $CLUSTER | Subnets: $SUBNETS"
@@ -490,6 +492,28 @@ jobs:
             --set args[0]="--kubelet-insecure-tls" \
             --wait --timeout=3m
           echo "Metrics Server installed — kubectl top nodes/pods now works"
+
+      # ── Install Cluster Autoscaler ──────────────────────────────────────────
+      - name: Install Cluster Autoscaler
+        run: |
+          helm repo add autoscaler https://kubernetes.github.io/autoscaler
+          helm repo update
+
+          helm upgrade --install cluster-autoscaler autoscaler/cluster-autoscaler \
+            --namespace kube-system \
+            --set autoDiscovery.clusterName=$CLUSTER \
+            --set awsRegion=$AWS_REGION \
+            --set rbac.serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$CA_ROLE \
+            --set extraArgs.balance-similar-node-groups=true \
+            --set extraArgs.skip-nodes-with-system-pods=false \
+            --set extraArgs.expander=least-waste \
+            --set extraArgs.scale-down-delay-after-add=2m \
+            --set extraArgs.scale-down-unneeded-time=2m \
+            --wait --timeout=3m
+
+          kubectl wait deployment -n kube-system cluster-autoscaler \
+            --for=condition=Available --timeout=3m
+          echo "Cluster Autoscaler installed — ASG min:2 max:4, watches for Pending pods"
 
       # ── Cleanup ─────────────────────────────────────────────────────────────
       - name: Cleanup one-off pods
