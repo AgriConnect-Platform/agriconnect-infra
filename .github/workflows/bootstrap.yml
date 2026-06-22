@@ -115,20 +115,21 @@ jobs:
             password: ${{ secrets.GH_PAT }}
           EOF
 
-      # ── Apply ArgoCD Application and inject dynamic SSM values ─────────────
-      - name: Apply ArgoCD Application
+      # ── Apply ArgoCD Applications (prod + dev) ─────────────────────────────
+      - name: Apply ArgoCD Applications
         run: |
+          # Production app — watches prod branch of helm repo → production namespace
           kubectl apply -f - <<EOF
           apiVersion: argoproj.io/v1alpha1
           kind: Application
           metadata:
-            name: agriconnect
+            name: agriconnect-prod
             namespace: argocd
           spec:
             project: default
             source:
               repoURL: https://github.com/agriconnect-platform/agriconnect-helm.git
-              targetRevision: main
+              targetRevision: prod
               path: helm/agriconnect
               helm:
                 valueFiles:
@@ -150,15 +151,48 @@ jobs:
                 - ServerSideApply=true
           EOF
 
+          # Dev app — watches dev branch of helm repo → dev namespace
+          kubectl apply -f - <<EOF
+          apiVersion: argoproj.io/v1alpha1
+          kind: Application
+          metadata:
+            name: agriconnect-dev
+            namespace: argocd
+          spec:
+            project: default
+            source:
+              repoURL: https://github.com/agriconnect-platform/agriconnect-helm.git
+              targetRevision: dev
+              path: helm/agriconnect
+              helm:
+                valueFiles:
+                  - values.yaml
+                parameters:
+                  - name: global.irsaRoleArn
+                    value: "$IRSA_ROLE"
+                  - name: ingress.subnets
+                    value: "$SUBNETS"
+            destination:
+              server: https://kubernetes.default.svc
+              namespace: dev
+            syncPolicy:
+              automated:
+                prune: true
+                selfHeal: true
+              syncOptions:
+                - CreateNamespace=true
+                - ServerSideApply=true
+          EOF
+
       # ── Wait for ArgoCD to sync and become healthy ──────────────────────────
       - name: Wait for ArgoCD sync
         run: |
           echo "Waiting for ArgoCD application to become healthy (max 5 min)..."
           HEALTHY=false
           for i in $(seq 1 30); do
-            SYNC=$(kubectl get application agriconnect -n argocd \
+            SYNC=$(kubectl get application agriconnect-prod -n argocd \
               -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "Unknown")
-            HEALTH=$(kubectl get application agriconnect -n argocd \
+            HEALTH=$(kubectl get application agriconnect-prod -n argocd \
               -o jsonpath='{.status.health.status}' 2>/dev/null || echo "Unknown")
             echo "Attempt $i/30 — Sync: $SYNC, Health: $HEALTH"
             if [ "$SYNC" = "Synced" ] && [ "$HEALTH" = "Healthy" ]; then
