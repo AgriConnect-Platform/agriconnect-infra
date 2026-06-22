@@ -200,9 +200,10 @@ jobs:
               HEALTHY=true
               break
             fi
-            # Fail fast — Degraded means pods are crashing, more waiting won't help
-            if [ "$HEALTH" = "Degraded" ]; then
-              echo "Health is Degraded — breaking early to dump diagnostics"
+            # Only fail fast if Synced+Degraded (sync done but pods still broken)
+            # If OutOfSync+Degraded, keep waiting — ArgoCD is still rolling out new images
+            if [ "$SYNC" = "Synced" ] && [ "$HEALTH" = "Degraded" ]; then
+              echo "Sync complete but health is Degraded — breaking early to dump diagnostics"
               break
             fi
             sleep 10
