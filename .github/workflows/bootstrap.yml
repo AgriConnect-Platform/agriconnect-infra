@@ -114,7 +114,7 @@ jobs:
               argocd.argoproj.io/secret-type: repository
           stringData:
             type: git
-            url: https://github.com/agriconnect-platform/agriconnect-helm.git
+            url: https://github.com/AgriConnect-Platform/agriconnect-helm.git
             username: x-access-token
             password: ${{ secrets.GH_PAT }}
           EOF
@@ -132,7 +132,7 @@ jobs:
           spec:
             project: default
             source:
-              repoURL: https://github.com/agriconnect-platform/agriconnect-helm.git
+              repoURL: https://github.com/AgriConnect-Platform/agriconnect-helm.git
               targetRevision: prod
               path: helm/agriconnect
               helm:
@@ -165,7 +165,7 @@ jobs:
           spec:
             project: default
             source:
-              repoURL: https://github.com/agriconnect-platform/agriconnect-helm.git
+              repoURL: https://github.com/AgriConnect-Platform/agriconnect-helm.git
               targetRevision: dev
               path: helm/agriconnect
               helm:
