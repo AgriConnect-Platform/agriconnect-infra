@@ -511,7 +511,7 @@ jobs:
             --set extraArgs.scale-down-unneeded-time=2m \
             --wait --timeout=3m
 
-          kubectl wait deployment -n kube-system cluster-autoscaler \
+          kubectl wait deployment -n kube-system cluster-autoscaler-aws-cluster-autoscaler \
             --for=condition=Available --timeout=3m
           echo "Cluster Autoscaler installed — ASG min:2 max:4, watches for Pending pods"
 
