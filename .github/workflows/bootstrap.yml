@@ -94,8 +94,12 @@ jobs:
         run: |
           kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
           kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml --server-side --force-conflicts
-          echo "Waiting for ArgoCD server to be ready..."
+          echo "Waiting for ArgoCD components to be ready..."
           kubectl wait --for=condition=available --timeout=300s deployment/argocd-server -n argocd
+          kubectl wait --for=condition=available --timeout=300s deployment/argocd-repo-server -n argocd
+          kubectl rollout status statefulset/argocd-application-controller -n argocd --timeout=300s
+          echo "Giving ArgoCD 20s to fully initialise..."
+          sleep 20
 
       # ── Give ArgoCD access to the private helm repo ─────────────────────────
       - name: Configure ArgoCD repo access
@@ -187,6 +191,8 @@ jobs:
       # ── Wait for ArgoCD to sync and become healthy ──────────────────────────
       - name: Wait for ArgoCD sync
         run: |
+          echo "Giving ArgoCD 30s to start syncing..."
+          sleep 30
           echo "Waiting for ArgoCD application to become healthy (max 5 min)..."
           HEALTHY=false
           for i in $(seq 1 30); do
