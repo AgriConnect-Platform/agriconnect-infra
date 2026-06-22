@@ -1,4 +1,4 @@
-# After `terraform apply` — Deployment Steps
+﻿# After `terraform apply` — Deployment Steps
 
 Everything is automated through two scripts. SSH in, run the script, done.
 
@@ -44,9 +44,9 @@ The script will ask you to enter 4 values. Type these exactly:
 
 ```
 AWS Region          →  ap-south-1
-SNS_TOPIC_ARN       →  arn:aws:sns:ap-south-1:978594443309:AgriConnect-WeatherAlerts
-EVENTS_TOPIC_ARN    →  arn:aws:sns:ap-south-1:978594443309:AgriConnect-Events
-NOTIFICATIONS_QUEUE_URL  →  https://sqs.ap-south-1.amazonaws.com/978594443309/AgriConnect-Notifications-Queue
+SNS_TOPIC_ARN       →  arn:aws:sns:ap-south-1:893431614084:AgriConnect-WeatherAlerts
+EVENTS_TOPIC_ARN    →  arn:aws:sns:ap-south-1:893431614084:AgriConnect-Events
+NOTIFICATIONS_QUEUE_URL  →  https://sqs.ap-south-1.amazonaws.com/893431614084/AgriConnect-Notifications-Queue
 ```
 
 The script automatically:

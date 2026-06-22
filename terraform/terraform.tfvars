@@ -1,4 +1,4 @@
-# ── AWS ───────────────────────────────────────────────────────────────────────
+﻿# ── AWS ───────────────────────────────────────────────────────────────────────
 aws_region = "ap-south-1"
 
 # ── Networking ────────────────────────────────────────────────────────────────
@@ -13,8 +13,8 @@ rds_username = "admin"
 # rds_password → set via TF_VAR_rds_password (GitHub Secret)
 
 # ── S3 ────────────────────────────────────────────────────────────────────────
-s3_produce_images_bucket  = "agriconnect-produce-images-978594443309"
-s3_delivery_proofs_bucket = "agriconnect-delivery-proofs-978594443309"
+s3_produce_images_bucket  = "agriconnect-produce-images-893431614084"
+s3_delivery_proofs_bucket = "agriconnect-delivery-proofs-893431614084"
 
 # ── JWT ───────────────────────────────────────────────────────────────────────
 # jwt_secret → set via TF_VAR_jwt_secret (GitHub Secret)
