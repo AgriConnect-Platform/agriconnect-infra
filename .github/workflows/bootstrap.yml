@@ -503,6 +503,7 @@ jobs:
             --namespace kube-system \
             --set autoDiscovery.clusterName=$CLUSTER \
             --set awsRegion=$AWS_REGION \
+            --set rbac.serviceAccount.name=cluster-autoscaler \
             --set rbac.serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$CA_ROLE \
             --set extraArgs.balance-similar-node-groups=true \
             --set extraArgs.skip-nodes-with-system-pods=false \
