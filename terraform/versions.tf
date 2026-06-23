@@ -5,7 +5,7 @@ terraform {
     bucket         = "agriconnect-tfstate-893431614084"
     key            = "agriconnect/terraform.tfstate"
     region         = "ap-south-1"
-    dynamodb_table = "agriconnect-tfstate-lock"
+    dynamodb_table = "agriconnect-terraform-locks"
     encrypt        = true
   }
 

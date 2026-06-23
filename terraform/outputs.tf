@@ -74,3 +74,23 @@ output "buyerbot_api_url" {
 output "secret_database_arn" {
   value = aws_secretsmanager_secret.database.arn
 }
+
+# ── Cost Estimation ────────────────────────────────────────────────────────────
+output "cost_estimation" {
+  description = "Approximate monthly cost breakdown for deployed resources (ap-south-1, USD)"
+  value = {
+    eks_nodes         = "${var.eks_node_desired_size}x ${var.eks_node_instance_type} nodes = ~$${var.eks_node_desired_size * 15}/mo"
+    eks_control_plane = "EKS cluster fee = ~$72/mo"
+    rds               = "db.t3.micro 20 GB PostgreSQL = ~$15/mo"
+    nat_gateway       = "1x NAT Gateway + data transfer = ~$33+/mo"
+    alb               = "1x Application Load Balancer = ~$18/mo"
+    cloudfront        = "CloudFront CDN (low traffic) = ~$1-5/mo"
+    s3                = "S3 buckets (images + frontend + tfstate) = ~$2-5/mo"
+    lambda_fns        = "3x Lambda (pay-per-request) = ~$0-2/mo"
+    sns_sqs           = "SNS + SQS event pipeline = ~$0-1/mo"
+    secrets_manager   = "1 secret = ~$0.40/mo"
+    cloudwatch        = "5 log groups (30-day retention) = ~$1-3/mo"
+    total_estimate    = "~$160-175/month (EKS nodes + NAT Gateway = ~70% of cost)"
+    optimization_tip  = "Add VPC endpoints for S3 and SQS to cut NAT Gateway data charges"
+  }
+}
