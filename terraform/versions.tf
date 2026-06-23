@@ -2,11 +2,11 @@ terraform {
   required_version = ">= 1.6.0"
 
   backend "s3" {
-    bucket         = "agriconnect-tfstate-893431614084"
-    key            = "agriconnect/terraform.tfstate"
-    region         = "ap-south-1"
-    dynamodb_table = "agriconnect-terraform-locks"
-    encrypt        = true
+    bucket       = "agriconnect-tfstate-893431614084"
+    key          = "agriconnect/terraform.tfstate"
+    region       = "ap-south-1"
+    use_lockfile = true
+    encrypt      = true
   }
 
   required_providers {
