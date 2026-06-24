@@ -59,7 +59,9 @@ jobs:
           TF_VAR_rds_password: ${{ secrets.TF_VAR_RDS_PASSWORD }}
           TF_VAR_jwt_secret: ${{ secrets.TF_VAR_JWT_SECRET }}
           TF_VAR_smtp_pass: ${{ secrets.TF_VAR_SMTP_PASS }}
-        run: terraform plan -var-file=terraform.tfvars -out=tfplan
+        run: |
+          terraform plan -var-file=terraform.tfvars -out=tfplan
+          terraform show -json tfplan > plan.json
 
       - name: Upload plan artifact
         uses: actions/upload-artifact@v4
@@ -67,15 +69,52 @@ jobs:
           name: tfplan
           path: |
             terraform/tfplan
+            terraform/plan.json
             terraform/lambda_package.zip
             terraform/farmbot_package.zip
             terraform/buyerbot_package.zip
           retention-days: 1
 
+  # ── Cost estimation — Infracost breakdown from plan ──────────────────────
+  cost:
+    name: Infracost Cost Estimate
+    needs: plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: terraform
+
+      - name: Setup Infracost
+        uses: infracost/actions/setup@v3
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+
+      - name: Run Infracost breakdown
+        run: |
+          infracost breakdown \
+            --path terraform/plan.json \
+            --format table \
+            --show-skipped
+
+      - name: Post cost summary
+        run: |
+          infracost breakdown \
+            --path terraform/plan.json \
+            --format json \
+            --out-file /tmp/infracost.json
+          infracost output \
+            --path /tmp/infracost.json \
+            --format github-comment >> $GITHUB_STEP_SUMMARY
+
   # ── Apply — manual approval gate via environment ───────────────────────────
   apply:
     name: Terraform Apply
-    needs: plan
+    needs: [plan, cost]
     runs-on: ubuntu-latest
     environment: production
     steps:
