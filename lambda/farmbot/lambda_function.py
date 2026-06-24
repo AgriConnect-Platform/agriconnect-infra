@@ -92,6 +92,8 @@ Nutrient deficiencies:
 • Calcium (Ca): Tip burn, blossom end rot in tomato/capsicum
 
 If photo is blurry, dark, or too close/far, ask for a clearer photo BEFORE diagnosing.
+If crop type is not visible or mentioned, ask BEFORE diagnosing — same disease looks different on tomato vs wheat vs cotton.
+When farmer provides crop type + symptoms in text alongside the image, use BOTH the image AND their description together for highest accuracy.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 KNOWLEDGE BASE:
@@ -214,9 +216,17 @@ def lambda_handler(event, context):
         if message:
             content.append({"text": message})
         elif image_b64:
-            # Image uploaded with no text — prompt for analysis
+            # Image uploaded with no text — ask for crop context before diagnosing
             content.append({
-                "text": "Please analyse this crop image. Describe what you see, identify any diseases, deficiencies or pest damage, and provide treatment recommendations with urgency level."
+                "text": (
+                    "A farmer has uploaded this crop photo without any description. "
+                    "Look at the image carefully. If you can clearly see the crop type AND visible symptoms "
+                    "(spots, lesions, yellowing, wilting, insects, rot), go ahead and give a full Mode 2 diagnosis. "
+                    "But if the crop type is unclear OR the image is blurry/dark/too far, "
+                    "ask the farmer: (1) What crop is this? (2) Which part of the plant is affected — leaf, stem, fruit, or root? "
+                    "(3) How long has it looked like this? (4) What state/district are you farming in? "
+                    "Keep the question short and friendly."
+                )
             })
 
         if not content:
