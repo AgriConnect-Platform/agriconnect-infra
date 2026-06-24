@@ -32,6 +32,15 @@ resource "aws_wafv2_web_acl" "main" {
       managed_rule_group_statement {
         name        = "AWSManagedRulesCommonRuleSet"
         vendor_name = "AWS"
+
+        # SizeRestrictions_BODY blocks bodies > 8 KB which breaks multipart image uploads.
+        # Count-only so uploads are logged but not blocked.
+        rule_action_override {
+          name = "SizeRestrictions_BODY"
+          action_to_use {
+            count {}
+          }
+        }
       }
     }
 
