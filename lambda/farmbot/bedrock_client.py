@@ -4,7 +4,7 @@ import os
 from system_prompt import SYSTEM_PROMPT
 
 BEDROCK_REGION = os.environ.get('BEDROCK_REGION', 'us-east-1')
-MODEL_ID = os.environ.get('MODEL_ID', 'anthropic.claude-3-5-haiku-20241022-v1:0')
+MODEL_ID = os.environ.get('MODEL_ID', 'amazon.nova-pro-v1:0')
 
 _bedrock = None
 

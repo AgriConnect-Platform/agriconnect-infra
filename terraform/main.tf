@@ -452,7 +452,7 @@ resource "aws_lambda_function" "farmbot" {
   environment {
     variables = {
       BEDROCK_REGION    = "us-east-1"
-      MODEL_ID          = "anthropic.claude-3-5-haiku-20241022-v1:0"
+      MODEL_ID          = "amazon.nova-pro-v1:0"
       S3_BUCKET_NAME    = aws_s3_bucket.farmbot_logs.bucket
       SNS_TOPIC_ARN     = aws_sns_topic.farmbot_critical.arn
       MAX_IMAGE_SIZE_MB = "5"
