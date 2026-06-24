@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'terraform/**'
+      - '.github/workflows/infra-terraform.yml'
   workflow_dispatch:
 
 env:
