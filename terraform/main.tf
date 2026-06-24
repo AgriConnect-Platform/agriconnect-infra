@@ -432,7 +432,7 @@ resource "aws_iam_role_policy" "farmbot_lambda" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      { Effect = "Allow", Action = ["bedrock:InvokeModel", "bedrock:Converse"], Resource = "arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-lite-v1:0" },
+      { Effect = "Allow", Action = ["bedrock:InvokeModel", "bedrock:Converse"], Resource = "arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-*" },
       { Effect = "Allow", Action = ["s3:PutObject", "s3:GetObject"], Resource = "${aws_s3_bucket.farmbot_logs.arn}/*" },
       { Effect = "Allow", Action = ["sns:Publish"], Resource = aws_sns_topic.farmbot_critical.arn },
       { Effect = "Allow", Action = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"], Resource = "arn:aws:logs:*:*:*" }
