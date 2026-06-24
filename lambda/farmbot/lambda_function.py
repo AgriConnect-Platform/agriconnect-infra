@@ -205,6 +205,12 @@ def lambda_handler(event, context):
         content = []
         if image_b64:
             image_bytes = base64.b64decode(image_b64)
+            if len(image_bytes) > 3 * 1024 * 1024:
+                return {
+                    "statusCode": 400,
+                    "headers": {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"},
+                    "body": json.dumps({"response": "Image is too large. Please use a photo under 3MB and try again.", "critical": False})
+                }
             fmt = detect_image_format(image_bytes)
             content.append({
                 "image": {
@@ -256,9 +262,15 @@ def lambda_handler(event, context):
             "body": json.dumps({"response": reply, "critical": is_critical})
         }
 
-    except Exception:
+    except Exception as e:
+        import traceback
+        print(f"[FarmBot ERROR] {type(e).__name__}: {e}")
+        print(traceback.format_exc())
+        msg = "Sorry, I couldn't process your request right now. Please try again."
+        if "image" in str(e).lower() or "validation" in str(e).lower():
+            msg = "The image could not be processed. Please use a clearer photo under 3MB (JPEG or PNG) and try again."
         return {
             "statusCode": 500,
             "headers": {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"},
-            "body": json.dumps({"response": "Sorry, I couldn't process your request right now. Please try again.", "critical": False})
+            "body": json.dumps({"response": msg, "critical": False})
         }
