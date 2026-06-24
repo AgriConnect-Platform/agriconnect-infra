@@ -19,6 +19,38 @@ resource "aws_wafv2_web_acl" "main" {
     allow {}
   }
 
+  # Priority 0 — explicitly allow media uploads before any WAF inspection.
+  # Image binaries can accidentally trigger body-inspection rules (size, XSS, RFI).
+  rule {
+    name     = "AllowMediaUploads"
+    priority = 0
+
+    action {
+      allow {}
+    }
+
+    statement {
+      byte_match_statement {
+        field_to_match {
+          uri_path {}
+        }
+        positional_constraint = "STARTS_WITH"
+        search_string         = "/api/media/upload"
+
+        text_transformation {
+          priority = 0
+          type     = "LOWERCASE"
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "AllowMediaUploadsMetric"
+      sampled_requests_enabled   = true
+    }
+  }
+
   # AWS Managed: Common Rule Set (SQLi, XSS, LFI, path traversal)
   rule {
     name     = "AWSManagedRulesCommonRuleSet"
