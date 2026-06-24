@@ -4,7 +4,7 @@ import os
 from system_prompt import SYSTEM_PROMPT
 
 BEDROCK_REGION = os.environ.get('BEDROCK_REGION', 'us-east-1')
-MODEL_ID = os.environ.get('MODEL_ID', 'amazon.nova-lite-v1:0')
+MODEL_ID = os.environ.get('MODEL_ID', 'anthropic.claude-3-5-haiku-20241022-v1:0')
 
 _bedrock = None
 
@@ -36,7 +36,7 @@ def build_text_payload(message, history=None):
     return {
         "messages": messages,
         "system": [{"text": SYSTEM_PROMPT}],
-        "inferenceConfig": {"maxTokens": 600, "temperature": 0.2, "topP": 0.9}
+        "inferenceConfig": {"maxTokens": 1500, "temperature": 0.3, "topP": 0.9}
     }
 
 
@@ -67,5 +67,5 @@ def build_multimodal_payload(message, image_b64, history=None):
     return {
         "messages": messages,
         "system": [{"text": SYSTEM_PROMPT}],
-        "inferenceConfig": {"maxTokens": 600, "temperature": 0.2, "topP": 0.9}
+        "inferenceConfig": {"maxTokens": 1500, "temperature": 0.3, "topP": 0.9}
     }

@@ -225,10 +225,10 @@ def lambda_handler(event, context):
         messages.append({"role": "user", "content": content})
 
         response = bedrock.converse(
-            modelId=os.environ.get("MODEL_ID", "amazon.nova-lite-v1:0"),
+            modelId=os.environ.get("MODEL_ID", "anthropic.claude-3-5-haiku-20241022-v1:0"),
             messages=messages,
             system=[{"text": SYSTEM_PROMPT}],
-            inferenceConfig={"maxTokens": 1024, "temperature": 0.7}
+            inferenceConfig={"maxTokens": 1500, "temperature": 0.3}
         )
 
         reply = response["output"]["message"]["content"][0]["text"]
